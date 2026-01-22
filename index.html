@@ -490,7 +490,7 @@
   left: 50%;
   transform: translate(-50%, -50%);
   font-size: 16px;
-  color: rgba(255,255,255,0.4);
+  color: rgba(255,255,255,0.55);
   text-align: center;
   pointer-events: none;
   z-index: 10;
@@ -502,7 +502,8 @@
 
 @media (min-width: 1024px) {
   #welcomeMsg {
-    font-size: 18px;
+    font-size: 22px;
+    color: rgba(255,255,255,0.6);
   }
 }
 
@@ -517,7 +518,7 @@
 <video id="video" autoplay playsinline muted></video>
 <canvas id="canvas"></canvas>
 
-<div id="welcomeMsg">Import an image or use live Viewfinder to compose</div>
+<div id="welcomeMsg">Import an image or use the live viewfinder to block-in and compose.</div>
 
 <div id="note">Frame: <span id="currentRatio">1:1</span></div>
 
@@ -535,7 +536,7 @@
 
   <button id="toggleCam" class="btn" title="Toggle camera">
     <span class="btn-icon">👁</span>
-    <span class="btn-label">Grid Only</span>
+    <span class="btn-label">Guide Only</span>
   </button>
   <div id="bgPalette">
   <button data-bg="#f3e9d2" title="Warm paper"></button>
@@ -617,54 +618,72 @@
 <div id="helpCard">
   <button id="helpCardClose">×</button>
   <h2>How Viewfinder+ Works</h2>
-  <p>Viewfinder+ helps you set up your drawing.</p>
+  <p>Viewfinder+ is a block-in and composition tool.<br>
+  For any canvas or sketchbook size.<br>
+  It helps you set up structure before drawing.</p>
   
   <hr>
   
-  <h3>1. Frame</h3>
+  <h3>1. Frame the Subject</h3>
   <ul>
-    <li>Use the live camera as a picture plane</li>
-    <li>Decide the crop using the corner guides</li>
-    <li>Keep your viewpoint steady</li>
+    <li>Start with the live camera or an imported image</li>
+    <li>Define composition using the Frame tool</li>
+    <li>Customize the frame to match your exact canvas or sketchbook size</li>
+    <li>Use custom ratios to compose precisely for your final surface</li>
   </ul>
   
   <hr>
   
-  <h3>2. Mark</h3>
+  <h3>2. Block-In for Artists</h3>
+  <p style="margin: 8px 0 12px 0;">Use guides to establish structure — not details.</p>
+  <p style="margin: 0 0 8px 0; font-weight: 600; color: var(--text);">Block-in tools:</p>
   <ul>
-    <li>Place a few points or short lines</li>
-    <li>Mark edges, intersections, alignments</li>
-    <li>Keep marks minimal</li>
+    <li><strong>Dot</strong> — key landmarks and reference points</li>
+    <li><strong>Plumb line</strong> — true vertical or horizontal reference</li>
+    <li><strong>Horizontal line</strong> — eye level, horizons, alignments</li>
+    <li><strong>Slant line (freeform tool)</strong> — two-point, draggable line for complex angles (power tool)</li>
+  </ul>
+  <p style="margin: 8px 0 0 0; font-size: 12px;">These tools are for layout, proportion, and spatial relationships.</p>
+  
+  <hr>
+  
+  <h3>3. Adjust Guides</h3>
+  <ul>
+    <li>Select any guide to move or refine it</li>
+    <li>Remove guides using the delete control next to the selection</li>
   </ul>
   
   <hr>
   
-  <h3>3. Freeze</h3>
+  <h3>4. Guides-Only Mode</h3>
   <ul>
-    <li>Lock the view and the marks</li>
-    <li>Prevents losing composition when you move</li>
+    <li>Hide the background to view clean block-in guides</li>
+    <li>Adjust background control when exporting guides only for better visibility</li>
   </ul>
   
   <hr>
   
-  <h3>4. Transfer</h3>
+  <h3>5. Save / Export</h3>
   <ul>
-    <li>Hold your sketchbook parallel to the screen</li>
-    <li>Copy the marked layout 1:1 onto paper</li>
-    <li>Continue drawing normally</li>
+    <li>Save your annotated view as an image</li>
+    <li>Export:
+      <ul style="margin: 4px 0 0 20px; padding: 0;">
+        <li>Image with guides</li>
+        <li>Guides only (clean block-in reference)</li>
+      </ul>
+    </li>
   </ul>
   
   <hr>
   
-  <h3>Optional</h3>
+  <h3>Help Hints</h3>
   <ul>
-    <li>Use Overlay to re-align later</li>
-    <li>Use Grids for proportion checks</li>
+    <li>Touch & hold "?" anywhere to see tool hints</li>
   </ul>
   
   <hr>
   
-  <p class="final-note">This app guides layout, not drawing.</p>
+  <p class="final-note">This app sets structure.<br>You do the drawing. Have fun!</p>
 </div>
 
 <input type="file" id="imgInput" accept="image/*">
