@@ -6,11 +6,10 @@ self.addEventListener("install", (event) => {
       cache.addAll([
         "./",
         "./index.html",
-        "./manifest.json",
-        "./icon-192.png",
-        "./icon-512.png",
-        "./maskable-192.png",
-        "./maskable-512.png"
+"./manifest.json",
+"./icon-192.png",
+"./icon-512.png",
+"./icon-512-maskable.png"
       ])
     )
   );
