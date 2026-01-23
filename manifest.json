@@ -1,10 +1,9 @@
 {
   "name": "Viewfinder Plus",
   "short_name": "VF+",
-  "id": "/",
   "description": "Block-in and composition tool for artists. Frame, guide, and export your compositions.",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#050505",
   "theme_color": "#050505",
