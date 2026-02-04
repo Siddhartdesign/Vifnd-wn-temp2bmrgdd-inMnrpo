@@ -1,4 +1,4 @@
-const CACHE_NAME = "vf-plus-v1";
+const CACHE_NAME = "vf-plus-v2";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -6,10 +6,10 @@ self.addEventListener("install", (event) => {
       cache.addAll([
         "./",
         "./index.html",
-"./manifest.json",
-"./icon-192.png",
-"./icon-512.png",
-"./icon-512-maskable.png"
+        "./manifest.json",
+        "./icon-192.png",
+        "./icon-512.png",
+        "./icon-512-maskable.png"
       ])
     )
   );
@@ -28,6 +28,13 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match("./index.html"))
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then(
       (response) => response || fetch(event.request)
