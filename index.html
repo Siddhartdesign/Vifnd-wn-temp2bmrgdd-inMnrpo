@@ -1,0 +1,2452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Viewfinder – Tool</title>
+
+<style>
+  :root {
+    --bg: #050505;
+    --panel: rgba(10,10,10,0.75);
+    --panel-soft: rgba(10,10,10,0.55);
+    --border: rgba(255,255,255,0.14);
+    --border-strong: rgba(255,255,255,0.26);
+    --text: rgba(255,255,255,0.94);
+    --muted: rgba(255,255,255,0.6);
+    --accent: #4fd1ff;
+    --danger: #ff7b7b;
+  }
+
+  * {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: radial-gradient(circle at top, #16181f 0, #050507 45%, #000 100%);
+    color: var(--text);
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  /* VIDEO & CANVAS */
+  #video, #canvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* TOP BAR – full width, subtle glass */
+  #topbar {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    padding: 6px;
+    border-radius: 14px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    z-index: 50;
+    display: flex;
+    gap: 6px;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  /* Performance: disable blur when camera is active */
+  body.camera-active #topbar,
+  body.camera-active #bottombar {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  /* BOTTOM BAR – centered cluster */
+ #bottombar {
+  position: fixed;
+  bottom: 15px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 12px;
+  border-radius: 18px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  z-index: 50;
+
+  display: flex;
+  gap: 8px;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+
+  width: max-content;
+  max-width: calc(100vw - 30px); /* More margin to prevent bleeding */
+}
+
+
+  /* BUTTONS */
+  .btn {
+  appearance: none;
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 7px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 12px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px; /* Space between icon and text */
+  min-width: 36px;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.1s ease,
+    box-shadow 0.15s ease;
+}
+
+  /* Button text labels - hidden by default on mobile */
+  .btn-label {
+    display: none;
+  }
+  
+  /* Mobile-specific: Show ratio text in frame button instead of emoji */
+  #frameFab .btn-icon {
+    display: none; /* Hide emoji on mobile */
+  }
+  
+  #frameFab .btn-label {
+    display: inline; /* Show ratio text on mobile */
+    color: var(--accent); /* Keep cyan color */
+  }
+  
+  /* Mobile-specific: Show "Custom" text instead of gear emoji */
+  #customRatioBtn .btn-icon {
+    display: none; /* Hide gear emoji on mobile */
+  }
+  
+  #customRatioBtn .btn-label {
+    display: inline; /* Show "Custom" text on mobile */
+    color: var(--accent); /* Match cyan color of frame ratio */
+  }
+  
+  /* Mobile-specific: Show "Clear" text instead of bin emoji */
+  #clearImgBtn .btn-icon {
+    display: none;
+  }
+  
+  #clearImgBtn .btn-label {
+    display: inline;
+  }
+
+  .btn:hover {
+    background: rgba(255,255,255,0.12);
+    border-color: var(--border-strong);
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.06);
+  }
+
+  .btn:active {
+    transform: scale(0.96);
+    box-shadow: none;
+  }
+
+  .btn.active {
+    background: rgba(79,209,255,0.18);
+    border-color: rgba(79,209,255,0.5);
+    color: var(--accent);
+    box-shadow: 0 0 0 1px rgba(79,209,255,0.35);
+  }
+
+  .btn.primary {
+    color: var(--accent);
+  }
+
+  .btn.danger {
+    color: var(--danger);
+    border-color: rgba(255,123,123,0.5);
+  }
+
+  /* TEMPORARY - Call to action button styles */
+  #exportBtn {
+    background: rgba(79,209,255,0.15);
+    border-color: rgba(79,209,255,0.4);
+    color: var(--accent);
+  }
+
+  #exportBtn:hover {
+    background: rgba(79,209,255,0.22);
+    border-color: rgba(79,209,255,0.6);
+  }
+
+  #loadImgBtn {
+    background: rgba(34,197,94,0.15);
+    border-color: rgba(34,197,94,0.4);
+    color: rgb(134,239,172);
+  }
+
+  #loadImgBtn:hover {
+    background: rgba(34,197,94,0.22);
+    border-color: rgba(34,197,94,0.6);
+  }
+
+  #customRatioBtn .btn-label {
+    color: var(--accent);
+  }
+
+  /* NOTE TAG (frame readout) */
+  #note {
+    position: fixed;
+    top: 54px;            /* sits just under top bar */
+    left: 12px;
+    padding: 6px 10px;
+    background: var(--panel-soft);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    z-index: 55;
+    font-size: 11.5px;
+    letter-spacing: 0.02em;
+  }
+
+  /* CUSTOM RATIO MODAL */
+  #modalCustom {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.55);
+    z-index: 9999;
+  }
+
+  #modalCustomInner {
+    width: 260px;
+    background: var(--panel);
+    border-radius: 16px;
+    padding: 14px;
+    border: 1px solid var(--border-strong);
+    box-shadow:
+      0 18px 45px rgba(0,0,0,0.65),
+      0 0 0 1px rgba(255,255,255,0.04);
+  }
+
+  #modalCustomInner h3 {
+    margin: 0 0 8px 0;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+  }
+
+  #modalCustomInner input,
+  #modalCustomInner select {
+    width: 100%;
+    padding: 7px 9px;
+    margin-top: 6px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.05);
+    color: var(--text);
+    font-size: 12px;
+  }
+
+  .modalBtn {
+    width: 100%;
+    margin-top: 8px;
+    padding: 9px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.08);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 12px;
+  }
+
+  .modalBtn:hover {
+    background: rgba(255,255,255,0.13);
+  }
+
+  input[type="file"] { display:none; }
+  /* BG PALETTE — under 👁 */
+#bgPalette {
+  position: fixed;
+  top: 54px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  gap: 8px;
+  padding: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  z-index: 60;
+}
+
+
+#bgPalette button {
+  width: 22px;
+  height: 22px;
+  display: block;
+  padding: 0;
+
+  background-clip: padding-box;
+  border-radius: 5px;
+  border: 1px solid var(--border-strong);
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+  /* bottom buttons biggers */
+  #bottombar .btn {
+  padding: 11px 15px;   /* makes buttons bigger */
+  font-size: 13.5px;    /* slightly more legible */
+  min-width: 44px;      /* better tap target */
+  border-radius: 12px;  /* matches increased size */
+}
+
+
+  /* spacer */
+  .group-gap {
+  width: 10px;
+  height: 1px;
+}
+/* ===== HELP AFFORDANCE (SAFE LAYER) ===== */
+#helpHint{
+  position: fixed;
+  z-index: 91;
+  opacity: 0.75;
+    user-select: none;
+  -webkit-user-select: none;
+}
+
+
+
+.help-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  pointer-events: auto;
+}
+
+.help-label {
+  position: absolute;
+  padding: 6px 9px;
+  font-size: 11px;
+  border-radius: 9px;
+  background: rgba(12,12,12,0.88);
+  border: 1px solid rgba(255,255,255,0.18);
+  color: rgba(255,255,255,0.92);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  white-space: nowrap;
+  box-shadow: 0 8px 22px rgba(0,0,0,0.55);
+
+  /* Mobile: vertical rotation */
+  transform: translate(-50%, -120%) rotate(-90deg);
+  transform-origin: left center;
+}
+
+/* ============================================
+   DESKTOP OPTIMIZATIONS (1024px and up)
+   ============================================ */
+@media (min-width: 1024px) {
+  /* Show text labels next to icons on desktop */
+  .btn-label {
+    display: inline;
+  }
+  
+  /* Desktop: Show frame emoji AND text */
+  #frameFab .btn-icon {
+    display: inline;
+  }
+  
+  #frameFab .btn-label {
+    display: inline;
+  }
+  
+  /* Desktop: Show gear emoji AND "Custom Frame" text */
+  #customRatioBtn .btn-icon {
+    display: inline;
+  }
+  
+  #customRatioBtn .btn-label {
+    display: inline;
+  }
+  
+  /* Desktop: Show bin emoji AND text */
+  #clearImgBtn .btn-icon {
+    display: inline;
+  }
+  
+  #clearImgBtn .btn-label {
+    display: inline;
+  }
+  
+  /* Restore desktop bottom bar spacing */
+  #bottombar {
+    padding: 14px 18px;
+    gap: 12px;
+  }
+
+  /* Make buttons bigger on desktop for better click targets */
+  #topbar .btn {
+    padding: 9px 14px;
+    font-size: 14px;
+    min-width: auto;
+  }
+
+  #bottombar .btn {
+    padding: 12px 18px;
+    font-size: 15px;
+    min-width: auto;
+  }
+
+  /* Make icons slightly larger on desktop */
+  .btn-icon {
+    font-size: 16px;
+  }
+
+  /* Horizontal help hints on desktop */
+  .help-label {
+    transform: translate(-50%, -120%);
+    transform-origin: center;
+    font-size: 12px;
+    padding: 7px 11px;
+  }
+
+  /* Slightly larger frame note on desktop */
+  #note {
+    font-size: 12.5px;
+    padding: 7px 12px;
+  }
+
+  /* Larger gap between button groups */
+  .group-gap {
+    width: 14px;
+  }
+}
+
+/* ============================================
+   NOTE 9 SIZE PHONES (401-420px)
+   Balance horizontal/vertical padding on bottom bar
+   ============================================ */
+@media (min-width: 401px) and (max-width: 420px) {
+  #bottombar {
+    padding: 10px 16px; /* More horizontal padding to match vertical */
+  }
+}
+
+/* ============================================
+   SMALL PHONES ONLY (iPhone 13 and smaller)
+   Note 9 (~412px) and Desktop remain unchanged
+   ============================================ */
+@media (max-width: 400px) {
+  /* Smaller padding and gap for bottom bar to prevent bleeding */
+  #bottombar {
+    padding: 8px 10px;
+    gap: 6px;
+    max-width: calc(100vw - 40px);
+  }
+  
+  #bottombar .btn {
+    padding: 9px 12px;
+    min-width: 38px;
+  }
+  
+  /* Smaller top bar padding */
+  #topbar {
+    padding: 5px;
+    gap: 5px;
+  }
+  
+  #topbar .btn {
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+}
+
+/* ============================================
+   HELP CARD - Instructions
+   ============================================ */
+#helpCard {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90%;
+  max-width: 420px;
+  max-height: 85vh;
+  overflow-y: auto;
+  background: rgba(12,12,12,0.95);
+  border: 1px solid var(--border-strong);
+  border-radius: 18px;
+  padding: 24px 28px;
+  z-index: 9998;
+  display: none;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#helpCard h2 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+#helpCard h3 {
+  margin: 0 0 4px 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+#helpCard p {
+  margin: 0 0 16px 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+#helpCard hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 18px 0;
+}
+
+#helpCard ul {
+  margin: 8px 0 16px 0;
+  padding-left: 20px;
+  list-style: none;
+}
+
+#helpCard li {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+  margin-bottom: 6px;
+  position: relative;
+}
+
+#helpCard li:before {
+  content: "•";
+  position: absolute;
+  left: -16px;
+  color: var(--accent);
+}
+
+#helpCard .final-note {
+  font-size: 13px;
+  font-style: italic;
+  color: var(--muted);
+  margin-top: 12px;
+}
+
+#helpCardClose {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 18px;
+  color: var(--text);
+  transition: background 0.15s ease;
+}
+
+#helpCardClose:hover {
+  background: rgba(255,255,255,0.12);
+}
+
+#helpCardOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 9997;
+  display: none;
+}
+
+/* TEMPORARY - Welcome message */
+#welcomeMsg {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 16px;
+  color: rgba(255,255,255,0.55);
+  text-align: center;
+  pointer-events: none;
+  z-index: 10;
+  max-width: 80%;
+  line-height: 1.6;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+
+@media (min-width: 1024px) {
+  #welcomeMsg {
+    font-size: 22px;
+    color: rgba(255,255,255,0.6);
+  }
+}
+
+
+</style>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#050505">
+</head>
+
+<body>
+
+<video id="video" autoplay playsinline muted></video>
+<canvas id="canvas"></canvas>
+
+<div id="welcomeMsg">Import an image or use the live viewfinder to block-in and compose.</div>
+
+<div id="note">Frame: <span id="currentRatio">1:1</span></div>
+
+<!-- Measurement display for selected guides -->
+<div id="measurementDisplay" style="display:none; position:fixed; background:rgba(12,12,12,0.9); color:rgba(255,255,255,0.95); padding:8px 12px; border-radius:8px; font-size:12px; z-index:100; border:1px solid rgba(79,209,255,0.4); pointer-events:none;"></div>
+
+<!-- Distance display between two points -->
+<div id="distanceDisplay" style="display:none; position:fixed; background:rgba(12,12,12,0.9); color:rgba(79,209,255,0.95); padding:8px 12px; border-radius:8px; font-size:12px; z-index:100; border:1px solid rgba(79,209,255,0.6); pointer-events:none; font-weight:600;"></div>
+
+<!-- Export Options Menu -->
+<div id="exportMenu" style="display:none; position:fixed; background:rgba(12,12,12,0.95); border:1px solid var(--border-strong); border-radius:12px; padding:8px; z-index:200; backdrop-filter:blur(14px);">
+  <button class="modalBtn" id="exportImage" style="margin:4px 0;">Export as Image</button>
+  <button class="modalBtn" id="exportPrintScale" style="margin:4px 0;">Export Print-to-Scale</button>
+  <button class="modalBtn" id="exportCancel" style="margin:4px 0; background:rgba(255,255,255,0.05);">Cancel</button>
+</div>
+
+<!-- Grid Options Menu -->
+<div id="gridMenu" style="display:none; position:fixed; background:rgba(12,12,12,0.95); border:1px solid var(--border-strong); border-radius:12px; padding:8px; z-index:200; backdrop-filter:blur(14px);">
+  <button class="modalBtn" id="gridThirds" style="margin:4px 0;">Thirds</button>
+  <button class="modalBtn" id="gridQuarters" style="margin:4px 0;">Quarters</button>
+  <button class="modalBtn" id="gridDiagonals" style="margin:4px 0;">Diagonals</button>
+  <button class="modalBtn" id="gridEvery5" style="margin:4px 0;">Every 5 units</button>
+  <button class="modalBtn" id="gridEvery10" style="margin:4px 0;">Every 10 units</button>
+  <button class="modalBtn" id="gridOff" style="margin:4px 0; background:rgba(255,255,255,0.05);">Off</button>
+</div>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <button id="loadImgBtn" class="btn" title="Load image">
+    <span class="btn-icon">📷</span>
+    <span class="btn-label">Import Image</span>
+  </button>
+  <button id="clearImgBtn" class="btn danger" title="Clear image">
+    <span class="btn-icon">🗑</span>
+    <span class="btn-label">Clear Image</span>
+  </button>
+  
+  <!-- Opacity Slider (only visible when image loaded) -->
+  <div id="opacityControl" style="display:none; align-items:center; gap:8px; margin-left:8px;">
+    <label style="font-size:11px; color:rgba(255,255,255,0.7);">Opacity:</label>
+    <input type="range" id="opacitySlider" min="0" max="100" value="70" style="width:100px;">
+    <span id="opacityValue" style="font-size:11px; color:rgba(255,255,255,0.9); min-width:35px;">70%</span>
+  </div>
+  
+<span class="group-gap"></span>
+
+  <button id="toggleCam" class="btn" title="Toggle camera">
+    <span class="btn-icon">👁</span>
+    <span class="btn-label">Guide Only</span>
+  </button>
+  <div id="bgPalette">
+  <button data-bg="#f3e9d2" title="Warm paper"></button>
+  <button data-bg="#ffffff" title="White"></button>
+  <button data-bg="#000000" title="Black"></button>
+</div>
+  <button id="switchBtn" class="btn" title="Switch camera">
+    <span class="btn-icon">⇄</span>
+    <span class="btn-label">Switch</span>
+  </button>
+<span class="group-gap"></span>
+
+
+  <button id="frameFab" class="btn primary" title="Frame preset">
+    <span class="btn-icon">📐</span>
+    <span class="btn-label">1:1</span>
+  </button>
+
+  <button id="customRatioBtn" class="btn" title="Custom ratio">
+    <span class="btn-icon">⚙</span>
+    <span class="btn-label">Custom</span>
+  </button>
+
+  <button id="gridBtn" class="btn" title="Grid options">
+    <span class="btn-icon">#</span>
+    <span class="btn-label">Grid</span>
+  </button>
+</div>
+
+<!-- BOTTOM BAR -->
+<div id="bottombar">
+  <button id="dotBtn" class="btn" title="Place dot">
+    <span class="btn-icon">•</span>
+    <span class="btn-label">Dot</span>
+  </button>
+  <button id="vertBtn" class="btn" title="Vertical line">
+    <span class="btn-icon">|</span>
+    <span class="btn-label">Vertical</span>
+  </button>
+  <button id="horiBtn" class="btn" title="Horizontal line">
+    <span class="btn-icon">—</span>
+    <span class="btn-label">Horizontal</span>
+  </button>
+  <button id="slantBtn" class="btn" title="Slant line">
+    <span class="btn-icon">/</span>
+    <span class="btn-label">Slant</span>
+  </button>
+<span class="group-gap"></span>
+
+  <button id="deleteBtn" class="btn danger" title="Delete selected">
+    <span class="btn-icon">×</span>
+    <span class="btn-label">Delete</span>
+  </button>
+<span class="group-gap"></span>
+
+  <button id="exportBtn" class="btn primary" title="Export image">
+    <span class="btn-icon">📥</span>
+    <span class="btn-label">Export Image</span>
+  </button>
+
+  <button id="helpBtn" class="btn" title="Help">
+    <span class="btn-icon">?</span>
+  </button>
+</div>
+
+<!-- Custom Ratio Modal -->
+<div id="modalCustom">
+  <div id="modalCustomInner">
+    <h3>Custom Frame</h3>
+    <input id="crW" type="number" placeholder="Width" value="16" step="0.1">
+    <input id="crH" type="number" placeholder="Height" value="9" step="0.1">
+    <select id="crUnit">
+      <option value="ratio">Ratio (proportional units)</option>
+      <option value="in">Inches</option>
+      <option value="cm">Centimeters</option>
+    </select>
+    <button id="crApply" class="modalBtn">Apply</button>
+    <button id="crClose" class="modalBtn">Cancel</button>
+  </div>
+</div>
+
+<!-- Help Card -->
+<div id="helpCardOverlay"></div>
+<div id="helpCard">
+  <button id="helpCardClose">×</button>
+  <h2>How Viewfinder+ Works</h2>
+  <p>Viewfinder+ is a block-in and composition tool.<br>
+  For any canvas or sketchbook size.<br>
+  It helps you set up structure before drawing.</p>
+  
+  <hr>
+  
+  <h3>1. Frame the Subject</h3>
+  <ul>
+    <li>Start with the live camera or an imported image</li>
+    <li>Define composition using the Frame tool</li>
+    <li>Customize the frame to match your exact canvas or sketchbook size</li>
+    <li>Use custom ratios to compose precisely for your final surface</li>
+  </ul>
+  
+  <hr>
+  
+  <h3>2. Block-In for Artists</h3>
+  <p style="margin: 8px 0 12px 0;">Use guides to establish structure — not details.</p>
+  <p style="margin: 0 0 8px 0; font-weight: 600; color: var(--text);">Block-in tools:</p>
+  <ul>
+    <li><strong>Dot</strong> — key landmarks and reference points</li>
+    <li><strong>Plumb line</strong> — true vertical or horizontal reference</li>
+    <li><strong>Horizontal line</strong> — eye level, horizons, alignments</li>
+    <li><strong>Slant line (freeform tool)</strong> — two-point, draggable line for complex angles (power tool)</li>
+  </ul>
+  <p style="margin: 8px 0 0 0; font-size: 12px;">These tools are for layout, proportion, and spatial relationships.</p>
+  
+  <hr>
+  
+  <h3>3. Adjust Guides</h3>
+  <ul>
+    <li>Select any guide to move or refine it</li>
+    <li>Remove guides using the delete control next to the selection</li>
+  </ul>
+  
+  <hr>
+  
+  <h3>4. Guides-Only Mode</h3>
+  <ul>
+    <li>Hide the background to view clean block-in guides</li>
+    <li>Adjust background control when exporting guides only for better visibility</li>
+  </ul>
+  
+  <hr>
+  
+  <h3>5. Save / Export</h3>
+  <ul>
+    <li>Save your annotated view as an image</li>
+    <li>Export:
+      <ul style="margin: 4px 0 0 20px; padding: 0;">
+        <li>Image with guides</li>
+        <li>Guides only (clean block-in reference)</li>
+      </ul>
+    </li>
+  </ul>
+  
+  <hr>
+  
+  <h3>Help Hints</h3>
+  <ul>
+    <li>Touch & hold "?" anywhere to see tool hints</li>
+  </ul>
+  
+  <hr>
+  
+  <p class="final-note">This app sets structure.<br>You do the drawing. Have fun!</p>
+</div>
+
+<!-- Tour Overlay -->
+<div id="tourOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:10000; align-items:center; justify-content:center; flex-direction:column;">
+  <div style="background:#1a1a1a; border-radius:16px; padding:32px; max-width:480px; margin:20px; border:2px solid var(--border-strong);">
+    <div id="tourContent" style="color:#fff; line-height:1.6;"></div>
+    <div style="margin-top:24px; display:flex; gap:12px; justify-content:space-between; align-items:center;">
+      <button id="tourSkip" class="modalBtn" style="background:rgba(255,255,255,0.05);">Skip Tour</button>
+      <div style="display:flex; gap:8px;">
+        <button id="tourPrev" class="modalBtn" style="display:none;">← Back</button>
+        <button id="tourNext" class="modalBtn">Next →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="imgInput" accept="image/*">
+
+<script>
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const DPR = window.devicePixelRatio || 1;
+
+const loadImgBtn = document.getElementById("loadImgBtn");
+const clearImgBtn = document.getElementById("clearImgBtn");
+const toggleCam = document.getElementById("toggleCam");
+const switchBtn = document.getElementById("switchBtn");
+const frameFab = document.getElementById("frameFab");
+const customRatioBtn = document.getElementById("customRatioBtn");
+const dotBtn = document.getElementById("dotBtn");
+const vertBtn = document.getElementById("vertBtn");
+const horiBtn = document.getElementById("horiBtn");
+const slantBtn = document.getElementById("slantBtn");
+const deleteBtn = document.getElementById("deleteBtn");
+const exportBtn = document.getElementById("exportBtn");
+const helpBtn = document.getElementById("helpBtn");
+
+const imgInput = document.getElementById("imgInput");
+const currentRatioLabel = document.getElementById("currentRatio");
+
+const modalCustom = document.getElementById("modalCustom");
+const crW = document.getElementById("crW");
+const crH = document.getElementById("crH");
+const crUnit = document.getElementById("crUnit");
+const crApply = document.getElementById("crApply");
+const crClose = document.getElementById("crClose");
+
+let devices = [];
+let currentDeviceIndex = 0;
+let stream = null;
+let videoHidden = false;
+let bgImage = null;
+let bgImageOpacity = 0.7; // Default 70% opacity
+let gridBg = "#000000";
+
+// Performance: Cache imported image position/scale
+let bgImageCache = null;
+
+let mode = null;
+let dots = [];
+let lines = [];
+let selected = null;
+let selectedDots = []; // For distance measurement between two dots
+let isDragging = false;
+let dragOffset = {x:0, y:0};
+
+let frame = {x:0, y:0, w:0, h:0, ratio:1, canvasW:null, canvasH:null, unit:'ratio'};
+let gridMode = 'off'; // 'off', 'thirds', 'quarters', 'every5', 'every10'
+
+const frameList = [
+  {label:"1:1", value:1},
+  {label:"4:3", value:4/3},
+  {label:"3:2", value:3/2},
+  {label:"16:9", value:16/9},
+  {label:"2:3", value:2/3},
+  {label:"9:16", value:9/16}
+];
+let frameIndex = 0;
+
+/* -------- Camera -------- */
+async function getDevices(){
+  try {
+    const all = await navigator.mediaDevices.enumerateDevices();
+    devices = all.filter(d=>d.kind==="videoinput");
+    if(!devices.length) devices=[{deviceId:null}];
+  } catch {
+    devices=[{deviceId:null}];
+  }
+}
+
+async function startCamera(){
+  if(stream) stream.getTracks().forEach(t=>t.stop());
+
+  const dId = devices[currentDeviceIndex]?.deviceId;
+  const constraints = dId
+    ? {video:{deviceId:{exact:dId}, facingMode:"environment"}}
+    : {video:{facingMode:"environment"}};
+
+  try {
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
+    video.srcObject = stream;
+  } catch {}
+}
+
+async function switchCamera(){
+  if(devices.length <= 1) return;
+  currentDeviceIndex = (currentDeviceIndex+1) % devices.length;
+  await startCamera();
+}
+
+/* -------- Frame -------- */
+function resizeCanvas(){
+  const w = window.innerWidth, h = window.innerHeight;
+  
+  // Set display size (CSS pixels)
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  
+  // Performance: Use lower DPR for live camera, full DPR for imported images
+  const effectiveDPR = (bgImage || videoHidden) ? DPR : 1;
+  
+  // Set actual canvas size (accounting for DPR for high DPI displays)
+  canvas.width = w * effectiveDPR;
+  canvas.height = h * effectiveDPR;
+  
+  // Scale all drawing operations by effectiveDPR
+  ctx.scale(effectiveDPR, effectiveDPR);
+
+  const pad = 0.05;
+  const maxW = w * (1 - pad*2);
+  const maxH = h * (1 - pad*2);
+
+  let fw, fh;
+  if(maxW / maxH > frame.ratio){
+    fh = maxH;
+    fw = fh * frame.ratio;
+  } else {
+    fw = maxW;
+    fh = fw / frame.ratio;
+  }
+
+  frame.w = fw;
+  frame.h = fh;
+  frame.x = (w - fw) / 2;
+  frame.y = (h - fh) / 2;
+}
+window.addEventListener("resize", resizeCanvas);
+
+/* -------- Draw -------- */
+function dist(x1,y1,x2,y2){ return Math.hypot(x2-x1,y2-y1); }
+
+function pointToSegmentDistance(px,py,x1,y1,x2,y2){
+  const A=px-x1,B=py-y1,C=x2-x1,D=y2-y1;
+  const dot=A*C+B*D, lenSq=C*C+D*D;
+  let t=(lenSq!==0)? dot/lenSq : -1;
+  if(t<0){ return Math.hypot(px-x1,py-y1); }
+  if(t>1){ return Math.hypot(px-x2,py-y2); }
+  return Math.hypot(px-(x1+t*C),py-(y1+t*D));
+}
+
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // Draw background (video or solid color)
+  if(!videoHidden && video.readyState >= video.HAVE_CURRENT_DATA){
+    // If user has imported an image, show black outside frame instead of camera
+    if(bgImage){
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+    } else {
+      ctx.drawImage(video,0,0,canvas.width,canvas.height);
+    }
+  } else {
+    ctx.fillStyle = gridBg;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+  }
+
+  // Draw the frame overlay (darkens everything outside the frame)
+  ctx.save();
+  ctx.fillStyle="rgba(0,0,0,0.7)";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.clearRect(frame.x,frame.y,frame.w,frame.h);
+  ctx.restore();
+
+  // Draw imported image inside the frame ONLY if camera is not hidden
+  if(bgImage && !videoHidden){
+    ctx.save();
+    
+    // First, fill the entire frame with black to cover any camera feed gaps
+    ctx.fillStyle = "#000000";
+    ctx.fillRect(frame.x, frame.y, frame.w, frame.h);
+    
+    // Then draw the imported image on top
+    ctx.beginPath();
+    ctx.rect(frame.x,frame.y,frame.w,frame.h);
+    ctx.clip();
+    
+    // Performance: Use cached calculations or compute if cache invalid
+    if(!bgImageCache || bgImageCache.frameW !== frame.w || bgImageCache.frameH !== frame.h){
+      const iw=bgImage.width, ih=bgImage.height;
+      const scale = Math.min(frame.w/iw, frame.h/ih);
+      const dw=iw*scale, dh=ih*scale;
+      bgImageCache = {
+        frameW: frame.w,
+        frameH: frame.h,
+        dw: dw,
+        dh: dh,
+        dx: frame.x+(frame.w-dw)/2,
+        dy: frame.y+(frame.h-dh)/2
+      };
+    }
+    
+    ctx.globalAlpha = bgImageOpacity; // Apply opacity
+    ctx.drawImage(bgImage, bgImageCache.dx, bgImageCache.dy, bgImageCache.dw, bgImageCache.dh);
+    ctx.globalAlpha = 1.0; // Reset opacity
+    ctx.restore();
+  }
+
+  // If camera/video is hidden, fill the frame with the selected background color
+  if(videoHidden){
+    ctx.fillStyle = gridBg;
+    ctx.fillRect(frame.x, frame.y, frame.w, frame.h);
+  }
+
+  // Draw frame border
+  ctx.strokeStyle="rgba(255,255,255,0.85)";
+  ctx.lineWidth=2;
+  ctx.strokeRect(frame.x,frame.y,frame.w,frame.h);
+
+  // Draw measurement tick marks if canvas size is set
+  if(frame.canvasW && frame.canvasH){
+    ctx.save();
+    ctx.strokeStyle="rgba(255,255,255,0.6)";
+    ctx.lineWidth=1;
+    ctx.font="9px system-ui";
+    ctx.fillStyle="rgba(255,255,255,0.7)";
+    
+    const tickSize = 6;
+    const labelOffset = 12;
+    
+    // Horizontal ticks (top and bottom)
+    const numTicksH = frame.unit === 'ratio' ? Math.round(frame.canvasW) : Math.floor(frame.canvasW);
+    for(let i = 0; i <= numTicksH; i++){
+      const x = frame.x + (i / frame.canvasW) * frame.w;
+      // Top ticks
+      ctx.beginPath();
+      ctx.moveTo(x, frame.y);
+      ctx.lineTo(x, frame.y - tickSize);
+      ctx.stroke();
+      // Bottom ticks
+      ctx.beginPath();
+      ctx.moveTo(x, frame.y + frame.h);
+      ctx.lineTo(x, frame.y + frame.h + tickSize);
+      ctx.stroke();
+      
+      // Labels (every 5 units or at ends)
+      if(i % 5 === 0 || i === 0 || i === numTicksH){
+        const label = frame.unit === 'ratio' ? i.toString() : i + (frame.unit === 'in' ? '"' : 'cm');
+        ctx.fillText(label, x - 8, frame.y - labelOffset);
+      }
+    }
+    
+    // Vertical ticks (left and right)
+    const numTicksV = frame.unit === 'ratio' ? Math.round(frame.canvasH) : Math.floor(frame.canvasH);
+    for(let i = 0; i <= numTicksV; i++){
+      const y = frame.y + (i / frame.canvasH) * frame.h;
+      // Left ticks
+      ctx.beginPath();
+      ctx.moveTo(frame.x, y);
+      ctx.lineTo(frame.x - tickSize, y);
+      ctx.stroke();
+      // Right ticks
+      ctx.beginPath();
+      ctx.moveTo(frame.x + frame.w, y);
+      ctx.lineTo(frame.x + frame.w + tickSize, y);
+      ctx.stroke();
+      
+      // Labels (every 5 units or at ends)
+      if(i % 5 === 0 || i === 0 || i === numTicksV){
+        const label = frame.unit === 'ratio' ? i.toString() : i + (frame.unit === 'in' ? '"' : 'cm');
+        ctx.fillText(label, frame.x - labelOffset - 15, y + 3);
+      }
+    }
+    
+    ctx.restore();
+  }
+
+  // Draw grid overlay if enabled
+  if(gridMode !== 'off'){
+    ctx.save();
+    ctx.strokeStyle="rgba(255,255,255,0.3)";
+    ctx.lineWidth=1;
+    ctx.setLineDash([4, 4]);
+    
+    if(gridMode === 'thirds'){
+      // Vertical thirds
+      for(let i = 1; i < 3; i++){
+        const x = frame.x + (frame.w / 3) * i;
+        ctx.beginPath();
+        ctx.moveTo(x, frame.y);
+        ctx.lineTo(x, frame.y + frame.h);
+        ctx.stroke();
+      }
+      // Horizontal thirds
+      for(let i = 1; i < 3; i++){
+        const y = frame.y + (frame.h / 3) * i;
+        ctx.beginPath();
+        ctx.moveTo(frame.x, y);
+        ctx.lineTo(frame.x + frame.w, y);
+        ctx.stroke();
+      }
+    } else if(gridMode === 'quarters'){
+      // Vertical quarters
+      for(let i = 1; i < 4; i++){
+        const x = frame.x + (frame.w / 4) * i;
+        ctx.beginPath();
+        ctx.moveTo(x, frame.y);
+        ctx.lineTo(x, frame.y + frame.h);
+        ctx.stroke();
+      }
+      // Horizontal quarters
+      for(let i = 1; i < 4; i++){
+        const y = frame.y + (frame.h / 4) * i;
+        ctx.beginPath();
+        ctx.moveTo(frame.x, y);
+        ctx.lineTo(frame.x + frame.w, y);
+        ctx.stroke();
+      }
+    } else if(gridMode === 'diagonals'){
+      // Perfect square diagonals - X from corner to corner
+      // Top-left to bottom-right
+      ctx.beginPath();
+      ctx.moveTo(frame.x, frame.y);
+      ctx.lineTo(frame.x + frame.w, frame.y + frame.h);
+      ctx.stroke();
+      
+      // Top-right to bottom-left
+      ctx.beginPath();
+      ctx.moveTo(frame.x + frame.w, frame.y);
+      ctx.lineTo(frame.x, frame.y + frame.h);
+      ctx.stroke();
+    } else if((gridMode === 'every5' || gridMode === 'every10') && frame.canvasW && frame.canvasH){
+      const interval = gridMode === 'every5' ? 5 : 10;
+      
+      // Vertical lines
+      const numV = Math.floor(frame.canvasW / interval);
+      for(let i = 1; i <= numV; i++){
+        const x = frame.x + (i * interval / frame.canvasW) * frame.w;
+        ctx.beginPath();
+        ctx.moveTo(x, frame.y);
+        ctx.lineTo(x, frame.y + frame.h);
+        ctx.stroke();
+      }
+      
+      // Horizontal lines
+      const numH = Math.floor(frame.canvasH / interval);
+      for(let i = 1; i <= numH; i++){
+        const y = frame.y + (i * interval / frame.canvasH) * frame.h;
+        ctx.beginPath();
+        ctx.moveTo(frame.x, y);
+        ctx.lineTo(frame.x + frame.w, y);
+        ctx.stroke();
+      }
+    }
+    
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  for(let i=0;i<dots.length;i++){
+    const d = dots[i];
+    const isInMultiSelect = selectedDots.includes(i);
+    
+    if((selected && selected.type==="dot" && selected.idx===i) || isInMultiSelect){
+      ctx.fillStyle="rgba(0,200,255,0.95)";
+      ctx.beginPath(); ctx.arc(d.x,d.y,8,0,Math.PI*2); ctx.fill();
+    } else {
+      ctx.fillStyle="rgba(255,255,255,0.9)";
+      ctx.beginPath(); ctx.arc(d.x,d.y,6,0,Math.PI*2); ctx.fill();
+    }
+  }
+  
+  // Draw distance line between two selected dots
+  if(selectedDots.length === 2){
+    const d1 = dots[selectedDots[0]];
+    const d2 = dots[selectedDots[1]];
+    if(d1 && d2){
+      ctx.save();
+      ctx.strokeStyle="rgba(79,209,255,0.6)";
+      ctx.lineWidth=2;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      ctx.moveTo(d1.x, d1.y);
+      ctx.lineTo(d2.x, d2.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+      
+      // Update distance display
+      updateDistanceDisplay(d1, d2);
+    }
+  }
+
+  for(let i=0;i<lines.length;i++){
+    const ln = lines[i];
+
+    if(selected && selected.type==="line" && selected.idx===i){
+      ctx.save();
+      ctx.strokeStyle="rgba(0,180,255,0.18)";
+      ctx.lineWidth=10;
+      ctx.lineCap="round";
+      ctx.beginPath();
+      if(ln.type==="vert"){
+        ctx.moveTo(ln.x,frame.y); ctx.lineTo(ln.x,frame.y+frame.h);
+      } else if(ln.type==="hori"){
+        ctx.moveTo(frame.x,ln.y); ctx.lineTo(frame.x+frame.w,ln.y);
+      } else {
+        ctx.moveTo(ln.x1,ln.y1); ctx.lineTo(ln.x2,ln.y2);
+      }
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.strokeStyle="rgba(0,200,255,0.95)";
+      ctx.lineWidth=3;
+    } else {
+      ctx.strokeStyle="rgba(255,255,255,0.9)";
+      ctx.lineWidth=2.5;
+    }
+
+    ctx.beginPath();
+    if(ln.type==="vert"){
+      ctx.moveTo(ln.x,frame.y); ctx.lineTo(ln.x,frame.y+frame.h);
+    } else if(ln.type==="hori"){
+      ctx.moveTo(frame.x,ln.y); ctx.lineTo(frame.x+frame.w,ln.y);
+    } else {
+      ctx.moveTo(ln.x1,ln.y1); ctx.lineTo(ln.x2,ln.y2);
+    }
+    ctx.stroke();
+
+    if(ln.type==="slant"){
+      ctx.fillStyle="rgba(255,255,255,0.9)";
+      ctx.beginPath(); ctx.arc(ln.x1,ln.y1,6,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(ln.x2,ln.y2,6,0,Math.PI*2); ctx.fill();
+    }
+  }
+
+  requestAnimationFrame(draw);
+}
+
+/* -------- Pointer handling -------- */
+function screenToCanvas(e){
+  const r = canvas.getBoundingClientRect();
+  const x = (e.clientX ?? e.touches?.[0]?.clientX) - r.left;
+  const y = (e.clientY ?? e.touches?.[0]?.clientY) - r.top;
+  return {x,y};
+}
+
+function findNearestDot(x,y){
+  for(let i=0;i<dots.length;i++){
+    if(dist(x,y,dots[i].x,dots[i].y) < 12) return i;
+  }
+  return -1;
+}
+
+function findNearestLine(x,y){
+  for(let i=lines.length-1;i>=0;i--){
+    const ln = lines[i];
+    if(ln.type==="slant"){
+      if(dist(x,y,ln.x1,ln.y1)<12) return {idx:i, part:"p1"};
+      if(dist(x,y,ln.x2,ln.y2)<12) return {idx:i, part:"p2"};
+      const d = pointToSegmentDistance(x,y,ln.x1,ln.y1,ln.x2,ln.y2);
+      if(d < 8) return {idx:i, part:"body"};
+    } else if(ln.type==="vert"){
+      if(Math.abs(x-ln.x)<8 && y>frame.y && y<frame.y+frame.h) return {idx:i, part:"body"};
+    } else if(ln.type==="hori"){
+      if(Math.abs(y-ln.y)<8 && x>frame.x && x<frame.x+frame.w) return {idx:i, part:"body"};
+    }
+  }
+  return null;
+}
+
+canvas.addEventListener("mousedown", e=>{
+  const p = screenToCanvas(e);
+  onPointerDown(p.x,p.y,e.shiftKey);
+});
+canvas.addEventListener("touchstart", e=>{
+  e.preventDefault();
+  const p = screenToCanvas(e);
+  onPointerDown(p.x,p.y,false);
+},{passive:false});
+
+function onPointerDown(x,y,shiftKey){
+  isDragging = true;
+  
+  // Hide welcome message on first interaction
+  document.getElementById("welcomeMsg").style.display = "none";
+
+  const dIdx = findNearestDot(x,y);
+  if(dIdx >= 0){
+    // Shift-click for distance measurement between two dots
+    if(shiftKey && selected && selected.type === "dot"){
+      // Add to selectedDots for distance measurement
+      if(!selectedDots.includes(selected.idx)){
+        selectedDots.push(selected.idx);
+      }
+      if(!selectedDots.includes(dIdx)){
+        selectedDots.push(dIdx);
+      }
+      // Keep only last 2 dots
+      if(selectedDots.length > 2){
+        selectedDots.shift();
+      }
+      selected = {type:"dot", idx:dIdx};
+    } else {
+      // Normal click - clear multi-select
+      selectedDots = [];
+      document.getElementById("distanceDisplay").style.display = "none";
+      selected = {type:"dot", idx:dIdx};
+    }
+    updateMeasurementDisplay();
+    return;
+  }
+
+  const lnHit = findNearestLine(x,y);
+  if(lnHit){
+    // Clear dot multi-select when selecting line
+    selectedDots = [];
+    document.getElementById("distanceDisplay").style.display = "none";
+    
+    selected = {type:"line", idx:lnHit.idx, sub:lnHit.part};
+    const ln = lines[lnHit.idx];
+    if(lnHit.part==="body" && ln){
+      if(ln.type==="slant"){
+        dragOffset.x = x;
+        dragOffset.y = y;
+      } else if(ln.type==="vert"){
+        dragOffset.x = ln.x - x;
+      } else if(ln.type==="hori"){
+        dragOffset.y = ln.y - y;
+      }
+    }
+    updateMeasurementDisplay();
+    return;
+  }
+
+  if(mode==="dot"){
+    dots.push({x,y});
+    selected = {type:"dot", idx:dots.length-1};
+    updateMeasurementDisplay();
+  } else if(mode==="vert"){
+    const vx = Math.max(frame.x, Math.min(frame.x+frame.w, x));
+    lines.push({type:"vert", x:vx});
+    selected = {type:"line", idx:lines.length-1, sub:"body"};
+    updateMeasurementDisplay();
+  } else if(mode==="hori"){
+    const hy = Math.max(frame.y, Math.min(frame.y+frame.h, y));
+    lines.push({type:"hori", y:hy});
+    selected = {type:"line", idx:lines.length-1, sub:"body"};
+    updateMeasurementDisplay();
+  } else if(mode==="slant"){
+    const x2 = x + 120;
+    const y2 = y + 40;
+    lines.push({type:"slant", x1:x, y1:y, x2:x2, y2:y2});
+    selected = {type:"line", idx:lines.length-1, sub:"p2"};
+    updateMeasurementDisplay();
+  }
+}
+
+canvas.addEventListener("mousemove", e=>{
+  const p = screenToCanvas(e);
+  onPointerMove(p.x,p.y);
+});
+canvas.addEventListener("touchmove", e=>{
+  e.preventDefault();
+  const p = screenToCanvas(e);
+  onPointerMove(p.x,p.y);
+},{passive:false});
+
+function onPointerMove(x,y){
+  if(!isDragging || !selected) return;
+
+  if(selected.type==="dot"){
+    dots[selected.idx].x = x;
+    dots[selected.idx].y = y;
+    return;
+  }
+
+  const ln = lines[selected.idx];
+  if(!ln) return;
+
+  if(selected.sub==="p1"){
+    ln.x1 = x; ln.y1 = y;
+  } else if(selected.sub==="p2"){
+    ln.x2 = x; ln.y2 = y;
+  } else if(selected.sub==="body"){
+    if(ln.type==="slant"){
+      const dx = x - dragOffset.x;
+      const dy = y - dragOffset.y;
+      ln.x1 += dx; ln.y1 += dy;
+      ln.x2 += dx; ln.y2 += dy;
+      dragOffset.x = x;
+      dragOffset.y = y;
+    } else if(ln.type==="vert"){
+      ln.x = Math.max(frame.x, Math.min(frame.x+frame.w, x + dragOffset.x));
+    } else if(ln.type==="hori"){
+      ln.y = Math.max(frame.y, Math.min(frame.y+frame.h, y + dragOffset.y));
+    }
+  }
+}
+
+canvas.addEventListener("mouseup", onPointerUp);
+canvas.addEventListener("mouseleave", onPointerUp);
+canvas.addEventListener("touchend", onPointerUp);
+
+function onPointerUp(){
+  isDragging = false;
+  if(selected && selected.type==="line"){
+    const ln = lines[selected.idx];
+    if(ln && ln.type==="slant"){
+      ln.x1 = Math.max(frame.x, Math.min(frame.x+frame.w, ln.x1));
+      ln.x2 = Math.max(frame.x, Math.min(frame.x+frame.w, ln.x2));
+      ln.y1 = Math.max(frame.y, Math.min(frame.y+frame.h, ln.y1));
+      ln.y2 = Math.max(frame.y, Math.min(frame.y+frame.h, ln.y2));
+    }
+  }
+  updateMeasurementDisplay();
+}
+
+/* -------- Measurement Display -------- */
+function updateMeasurementDisplay(){
+  const measureDiv = document.getElementById("measurementDisplay");
+  
+  if(!frame.canvasW || !frame.canvasH || !selected){
+    measureDiv.style.display = "none";
+    return;
+  }
+  
+  let text = "";
+  let x, y;
+  
+  if(selected.type === "dot"){
+    const dot = dots[selected.idx];
+    x = dot.x;
+    y = dot.y;
+    
+    // Calculate position relative to frame
+    const fromLeft = ((x - frame.x) / frame.w) * frame.canvasW;
+    const fromBottom = ((frame.y + frame.h - y) / frame.h) * frame.canvasH;
+    
+    const unitLabel = frame.unit === 'ratio' ? ' units' : (frame.unit === 'in' ? '"' : ' cm');
+    text = `${fromLeft.toFixed(1)}${unitLabel} from left\n${fromBottom.toFixed(1)}${unitLabel} from bottom`;
+  } else if(selected.type === "line"){
+    const ln = lines[selected.idx];
+    
+    if(ln.type === "vert"){
+      x = ln.x;
+      y = frame.y + frame.h / 2;
+      const fromLeft = ((x - frame.x) / frame.w) * frame.canvasW;
+      const unitLabel = frame.unit === 'ratio' ? ' units' : (frame.unit === 'in' ? '"' : ' cm');
+      text = `Vertical line at ${fromLeft.toFixed(1)}${unitLabel} from left`;
+    } else if(ln.type === "hori"){
+      x = frame.x + frame.w / 2;
+      y = ln.y;
+      const fromBottom = ((frame.y + frame.h - y) / frame.h) * frame.canvasH;
+      const unitLabel = frame.unit === 'ratio' ? ' units' : (frame.unit === 'in' ? '"' : ' cm');
+      text = `Horizontal line at ${fromBottom.toFixed(1)}${unitLabel} from bottom`;
+    } else if(ln.type === "slant"){
+      x = (ln.x1 + ln.x2) / 2;
+      y = (ln.y1 + ln.y2) / 2;
+      
+      // Calculate distance and angle
+      const pixelDist = dist(ln.x1, ln.y1, ln.x2, ln.y2);
+      
+      if(frame.canvasW && frame.canvasH){
+        // Convert to real units
+        const frameDiagonal = Math.sqrt(frame.w * frame.w + frame.h * frame.h);
+        const canvasDiagonal = Math.sqrt(frame.canvasW * frame.canvasW + frame.canvasH * frame.canvasH);
+        const realDist = (pixelDist / frameDiagonal) * canvasDiagonal;
+        const unitLabel = frame.unit === 'ratio' ? ' units' : (frame.unit === 'in' ? '"' : ' cm');
+        
+        // Calculate angle (0° = horizontal right, 90° = vertical up)
+        const dx = ln.x2 - ln.x1;
+        const dy = ln.y2 - ln.y1;
+        let angle = Math.atan2(-dy, dx) * (180 / Math.PI); // Negative dy because canvas Y is inverted
+        if(angle < 0) angle += 360;
+        
+        text = `Slant: ${realDist.toFixed(1)}${unitLabel} long, ${angle.toFixed(0)}°`;
+      } else {
+        text = `Slant line: ${pixelDist.toFixed(0)} pixels`;
+      }
+    }
+  }
+  
+  if(text){
+    measureDiv.textContent = text;
+    measureDiv.style.display = "block";
+    measureDiv.style.left = (x + 20) + "px";
+    measureDiv.style.top = (y - 40) + "px";
+  } else {
+    measureDiv.style.display = "none";
+  }
+}
+
+/* -------- Distance Display Between Two Dots -------- */
+function updateDistanceDisplay(d1, d2){
+  const distDiv = document.getElementById("distanceDisplay");
+  
+  if(!d1 || !d2){
+    distDiv.style.display = "none";
+    return;
+  }
+  
+  const pixelDist = dist(d1.x, d1.y, d2.x, d2.y);
+  
+  // If canvas measurements are set, convert to real units
+  if(frame.canvasW && frame.canvasH){
+    // Calculate distance as percentage of frame diagonal
+    const frameDiagonal = Math.sqrt(frame.w * frame.w + frame.h * frame.h);
+    const canvasDiagonal = Math.sqrt(frame.canvasW * frame.canvasW + frame.canvasH * frame.canvasH);
+    const realDist = (pixelDist / frameDiagonal) * canvasDiagonal;
+    
+    const unitLabel = frame.unit === 'ratio' ? ' units' : (frame.unit === 'in' ? '"' : ' cm');
+    distDiv.textContent = `Distance: ${realDist.toFixed(2)}${unitLabel}`;
+  } else {
+    distDiv.textContent = `Distance: ${pixelDist.toFixed(0)} pixels`;
+  }
+  
+  // Position between the two dots
+  const midX = (d1.x + d2.x) / 2;
+  const midY = (d1.y + d2.y) / 2;
+  
+  distDiv.style.display = "block";
+  distDiv.style.left = (midX + 10) + "px";
+  distDiv.style.top = (midY - 30) + "px";
+}
+
+/* -------- Delete (button + keys) -------- */
+deleteBtn.onclick = ()=>{
+  if(!selected) return;
+  if(selected.type==="dot") dots.splice(selected.idx,1);
+  if(selected.type==="line") lines.splice(selected.idx,1);
+  selected = null;
+  selectedDots = [];
+  document.getElementById("measurementDisplay").style.display = "none";
+  document.getElementById("distanceDisplay").style.display = "none";
+};
+
+window.addEventListener("keydown", e=>{
+  if((e.key === "Delete" || e.key === "Backspace") && selected){
+    if(selected.type==="dot") dots.splice(selected.idx,1);
+    if(selected.type==="line") lines.splice(selected.idx,1);
+    selected = null;
+    selectedDots = [];
+    document.getElementById("measurementDisplay").style.display = "none";
+    document.getElementById("distanceDisplay").style.display = "none";
+  }
+});
+
+/* -------- Modes -------- */
+function setMode(m){
+  mode = m;
+  [dotBtn,vertBtn,horiBtn,slantBtn].forEach(b=>b.classList.remove("active"));
+  if(m==="dot") dotBtn.classList.add("active");
+  if(m==="vert") vertBtn.classList.add("active");
+  if(m==="hori") horiBtn.classList.add("active");
+  if(m==="slant") slantBtn.classList.add("active");
+}
+dotBtn.onclick = ()=>setMode("dot");
+vertBtn.onclick = ()=>setMode("vert");
+horiBtn.onclick = ()=>setMode("hori");
+slantBtn.onclick = ()=>setMode("slant");
+
+/* -------- Image Import -------- */
+loadImgBtn.onclick = ()=> imgInput.click();
+imgInput.onchange = e=>{
+  const file = e.target.files && e.target.files[0];
+  if(!file) return;
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+  img.onload = ()=>{
+    bgImage = img;
+    imgInput.value = "";
+    // Hide welcome message
+    document.getElementById("welcomeMsg").style.display = "none";
+    // Show opacity control
+    document.getElementById("opacityControl").style.display = "flex";
+    // Performance: switch to full DPR for imported image
+    document.body.classList.remove("camera-active");
+    resizeCanvas();
+  };
+  img.onerror = ()=>{
+    URL.revokeObjectURL(url);
+    imgInput.value = "";
+  };
+  img.src = url;
+};
+clearImgBtn.onclick = ()=>{ 
+  bgImage = null;
+  bgImageCache = null; // Clear cache
+  // Hide opacity control
+  document.getElementById("opacityControl").style.display = "none";
+  // Performance: restore camera mode
+  if(!videoHidden) document.body.classList.add("camera-active");
+  resizeCanvas();
+};
+
+/* -------- Opacity Slider -------- */
+const opacitySlider = document.getElementById("opacitySlider");
+const opacityValue = document.getElementById("opacityValue");
+
+opacitySlider.oninput = ()=>{
+  bgImageOpacity = opacitySlider.value / 100;
+  opacityValue.textContent = opacitySlider.value + "%";
+};
+
+/* -------- Camera toggle + BG cycling -------- */
+const bgPalette = document.getElementById("bgPalette");
+
+toggleCam.onclick = ()=>{
+  videoHidden = !videoHidden;
+  bgPalette.style.display = videoHidden ? "flex" : "none";
+  
+  // Performance: toggle blur and DPR based on camera state
+  if(videoHidden || bgImage){
+    document.body.classList.remove("camera-active");
+  } else {
+    document.body.classList.add("camera-active");
+  }
+  resizeCanvas();
+};
+  
+switchBtn.onclick = switchCamera;
+  
+bgPalette.querySelectorAll("button").forEach(btn=>{
+  btn.style.background = btn.dataset.bg;
+  btn.onclick = ()=>{
+    gridBg = btn.dataset.bg;
+  };
+});
+
+/* -------- Frame FAB + Custom ratio -------- */
+frameFab.onclick = ()=>{
+  frameIndex = (frameIndex+1) % frameList.length;
+  const f = frameList[frameIndex];
+  frame.ratio = f.value;
+  const labelSpan = frameFab.querySelector('.btn-label');
+  const isMobile = window.innerWidth < 1024;
+  
+  if(labelSpan){
+    // Mobile: show just ratio (e.g., "1:1"), Desktop: show "Frame: 1:1"
+    labelSpan.textContent = isMobile ? f.label : 'Frame: ' + f.label;
+  } else {
+    frameFab.querySelector('.btn-icon').textContent = f.label;
+  }
+  currentRatioLabel.textContent = f.label;
+  resizeCanvas();
+};
+
+customRatioBtn.onclick = ()=> modalCustom.style.display = "flex";
+crClose.onclick = ()=> modalCustom.style.display = "none";
+crApply.onclick = ()=>{
+  const w = parseFloat(crW.value);
+  const h = parseFloat(crH.value);
+  if(!w || !h) return;
+  
+  const unit = crUnit.value; // 'ratio', 'in', or 'cm'
+  
+  // Store canvas measurements
+  frame.canvasW = w;
+  frame.canvasH = h;
+  frame.unit = unit;
+  
+  // Calculate ratio (convert to mm for ratio calculation if needed)
+  let W = w, H = h;
+  if(unit === "in"){ W *= 25.4; H *= 25.4; }
+  if(unit === "cm"){ W *= 10; H *= 10; }
+  const ratio = W / H;
+  
+  if(ratio > 0){
+    frame.ratio = ratio;
+    const labelSpan = frameFab.querySelector('.btn-label');
+    const isMobile = window.innerWidth < 1024;
+    
+    if(labelSpan){
+      // Mobile: show just ratio (e.g., "16:9"), Desktop: show "Frame: 16:9"
+      labelSpan.textContent = isMobile ? `${w}:${h}` : `Frame: ${w}:${h}`;
+    } else {
+      frameFab.querySelector('.btn-icon').textContent = `${w}:${h}`;
+    }
+    currentRatioLabel.textContent = `${w}×${h}`;
+    resizeCanvas();
+  }
+  modalCustom.style.display = "none";
+};
+
+/* -------- Help Hint -------- */
+let helpHintEl = null;
+let helpOverlayEl = null;
+let helpTimer = null;
+let helpActive = false;
+const HOLD_MS = 420;
+
+const helpTargets = [
+  { el: loadImgBtn, label: "Load an image from your device" },
+  { el: clearImgBtn, label: "Clear the loaded image" },
+  { el: toggleCam, label: "Toggle camera on/off" },
+  { el: switchBtn, label: "Switch between cameras" },
+  { el: frameFab, label: "Cycle through frame ratios" },
+  { el: customRatioBtn, label: "Set a custom aspect ratio" },
+  { el: dotBtn, label: "Place guide dots" },
+  { el: vertBtn, label: "Add vertical lines" },
+  { el: horiBtn, label: "Add horizontal lines" },
+  { el: slantBtn, label: "Add diagonal lines" },
+  { el: deleteBtn, label: "Delete selected element" },
+  { el: exportBtn, label: "Export the composition" }
+];
+
+function showHelp(){
+  if(helpActive) return;
+  helpActive = true;
+
+  if(!helpOverlayEl){
+    helpOverlayEl = document.createElement("div");
+    helpOverlayEl.className = "help-overlay";
+    document.body.appendChild(helpOverlayEl);
+  }
+
+  if(!helpHintEl){
+    helpHintEl = document.createElement("div");
+    helpHintEl.id = "helpHint";
+    document.body.appendChild(helpHintEl);
+  }
+
+  helpHintEl.innerHTML = "";
+
+  helpTargets.forEach((t)=>{
+    if(!t.el) return;
+    const rect = t.el.getBoundingClientRect();
+    const lbl = document.createElement("div");
+    lbl.className = "help-label";
+    lbl.textContent = t.label;
+    
+    const screenMid = window.innerHeight / 2;
+    
+    // Check if we're on desktop (1024px+)
+    const isDesktop = window.innerWidth >= 1024;
+    
+    if(isDesktop){
+      // Desktop: horizontal labels
+      lbl.style.left = rect.left + rect.width/2 + "px";
+      lbl.style.top = (rect.top < screenMid ? rect.bottom + 8 : rect.top - 38) + "px";
+    } else {
+      // Mobile: vertical rotated labels
+      lbl.style.left = rect.left + rect.width/2 + 38 + (t.dx || 0) + "px";
+      lbl.style.top = (rect.top < screenMid ? rect.bottom + 192 : rect.top - 60) + "px";
+    }
+    
+    helpHintEl.appendChild(lbl);
+  });
+
+  helpOverlayEl.addEventListener("pointerdown", hideHelp);
+  helpOverlayEl.addEventListener("touchstart", hideHelp);
+}
+
+function hideHelp(){
+  clearTimeout(helpTimer);
+  helpTimer = null;
+  helpActive = false;
+  if(helpHintEl){
+    helpHintEl.remove();
+    helpHintEl = null;
+  }
+  if(helpOverlayEl){
+    helpOverlayEl.remove();
+    helpOverlayEl = null;
+  }
+}
+
+// Help button behavior
+// Mobile: click = card, touch-hold = hints, double-tap = tour
+// Desktop: left-click = card, right-click = hints, double-click = tour
+
+let helpClickCount = 0;
+let helpClickTimer = null;
+
+helpBtn.addEventListener("click", (e)=>{
+  if(e.button !== 0) return; // Only left click
+  e.preventDefault();
+  e.stopPropagation();
+  clearTimeout(helpTimer);
+  
+  helpClickCount++;
+  
+  if(helpClickCount === 1){
+    helpClickTimer = setTimeout(()=>{
+      // Single click - show help card
+      const helpCard = document.getElementById("helpCard");
+      const helpCardOverlay = document.getElementById("helpCardOverlay");
+      helpCard.style.display = "block";
+      helpCardOverlay.style.display = "block";
+      helpClickCount = 0;
+    }, 300);
+  } else if(helpClickCount === 2){
+    // Double click - show tour
+    clearTimeout(helpClickTimer);
+    startTour();
+    helpClickCount = 0;
+  }
+});
+
+// Right-click for tool hints on desktop
+helpBtn.addEventListener("contextmenu", (e)=>{
+  e.preventDefault();
+  e.stopPropagation();
+  showHelp();
+  
+  // Auto-hide after 3 seconds on right-click
+  setTimeout(hideHelp, 3000);
+});
+
+// Touch and hold for hints on mobile
+helpBtn.addEventListener("touchstart", (e)=>{
+  e.preventDefault();
+  e.stopPropagation();
+  helpTimer = setTimeout(()=>{
+    showHelp();
+  }, HOLD_MS);
+}, { passive: false });
+
+helpBtn.addEventListener("touchend", (e)=>{
+  if(helpActive){
+    hideHelp();
+  }
+});
+
+helpBtn.addEventListener("touchcancel", ()=>{
+  clearTimeout(helpTimer);
+  if(helpActive) hideHelp();
+});
+
+// Close help card
+const helpCardClose = document.getElementById("helpCardClose");
+const helpCardOverlay = document.getElementById("helpCardOverlay");
+
+helpCardClose.addEventListener("click", ()=>{
+  document.getElementById("helpCard").style.display = "none";
+  helpCardOverlay.style.display = "none";
+});
+
+helpCardOverlay.addEventListener("click", ()=>{
+  document.getElementById("helpCard").style.display = "none";
+  helpCardOverlay.style.display = "none";
+});
+
+/* -------- Export -------- */
+const exportMenu = document.getElementById("exportMenu");
+const exportImageBtn = document.getElementById("exportImage");
+const exportPrintScaleBtn = document.getElementById("exportPrintScale");
+const exportCancelBtn = document.getElementById("exportCancel");
+
+exportBtn.onclick = (e)=>{
+  // Show export menu with smart positioning
+  const rect = exportBtn.getBoundingClientRect();
+  const menuHeight = 140; // Approximate menu height
+  const spaceBelow = window.innerHeight - rect.bottom;
+  const spaceAbove = rect.top;
+  
+  exportMenu.style.display = "block";
+  exportMenu.style.left = rect.left + "px";
+  
+  // Position above if not enough space below
+  if(spaceBelow < menuHeight && spaceAbove > menuHeight){
+    exportMenu.style.top = (rect.top - menuHeight - 8) + "px";
+  } else {
+    exportMenu.style.top = (rect.bottom + 8) + "px";
+  }
+};
+
+exportImageBtn.onclick = ()=>{
+  exportMenu.style.display = "none";
+  const wasHelpActive = helpActive;
+  if(wasHelpActive) hideHelp();
+
+  const data = canvas.toDataURL("image/png");
+  const a = document.createElement("a");
+  a.href = data;
+  a.download = "composition.png";
+  a.click();
+};
+
+exportPrintScaleBtn.onclick = ()=>{
+  exportMenu.style.display = "none";
+  
+  if(!frame.canvasW || !frame.canvasH){
+    alert("Please set canvas dimensions in Custom Frame first");
+    return;
+  }
+  
+  const wasHelpActive = helpActive;
+  if(wasHelpActive) hideHelp();
+  
+  // Create print-to-scale canvas
+  const DPI = 300; // Standard print DPI
+  const MARGIN = 100; // Margin in pixels for measurements (about 0.33 inches at 300 DPI)
+  
+  let canvasW, canvasH; // Exact canvas size in pixels
+  
+  if(frame.unit === 'in'){
+    canvasW = frame.canvasW * DPI;
+    canvasH = frame.canvasH * DPI;
+  } else if(frame.unit === 'cm'){
+    canvasW = (frame.canvasW / 2.54) * DPI;
+    canvasH = (frame.canvasH / 2.54) * DPI;
+  } else {
+    // Ratio mode - use A4 size at 300 DPI as default (8.27 x 11.69 inches)
+    const aspectRatio = frame.canvasW / frame.canvasH;
+    if(aspectRatio > 1){
+      // Landscape
+      canvasW = 11.69 * DPI;
+      canvasH = canvasW / aspectRatio;
+    } else {
+      // Portrait
+      canvasH = 11.69 * DPI;
+      canvasW = canvasH * aspectRatio;
+    }
+  }
+  
+  // Total print size = canvas + margins on all sides
+  const printW = canvasW + (MARGIN * 2);
+  const printH = canvasH + (MARGIN * 2);
+  
+  const printCanvas = document.createElement("canvas");
+  printCanvas.width = printW;
+  printCanvas.height = printH;
+  const printCtx = printCanvas.getContext("2d");
+  
+  // White background
+  printCtx.fillStyle = "#FFFFFF";
+  printCtx.fillRect(0, 0, printW, printH);
+  
+  // Draw imported image if present (inside canvas area only)
+  if(bgImage){
+    printCtx.save();
+    printCtx.beginPath();
+    printCtx.rect(MARGIN, MARGIN, canvasW, canvasH);
+    printCtx.clip();
+    
+    const iw = bgImage.width, ih = bgImage.height;
+    const scale = Math.min(canvasW/iw, canvasH/ih);
+    const dw = iw*scale, dh = ih*scale;
+    const dx = MARGIN + (canvasW-dw)/2, dy = MARGIN + (canvasH-dh)/2;
+    printCtx.drawImage(bgImage, dx, dy, dw, dh);
+    printCtx.restore();
+  }
+  
+  // Draw frame border (exact canvas size)
+  printCtx.strokeStyle = "#000000";
+  printCtx.lineWidth = 3;
+  printCtx.strokeRect(MARGIN, MARGIN, canvasW, canvasH);
+  
+  // Draw measurement tick marks in margin area
+  printCtx.strokeStyle = "rgba(0,0,0,0.8)";
+  printCtx.lineWidth = 2;
+  printCtx.font = "bold 28px system-ui";
+  printCtx.fillStyle = "rgba(0,0,0,0.9)";
+  
+  const tickSize = 20;
+  
+  // Horizontal ticks and labels (top and bottom margins)
+  const numTicksH = frame.unit === 'ratio' ? Math.round(frame.canvasW) : Math.floor(frame.canvasW);
+  for(let i = 0; i <= numTicksH; i++){
+    const x = MARGIN + (i / frame.canvasW) * canvasW;
+    
+    // Top tick extending into margin
+    printCtx.beginPath();
+    printCtx.moveTo(x, MARGIN);
+    printCtx.lineTo(x, MARGIN - tickSize);
+    printCtx.stroke();
+    
+    // Bottom tick extending into margin
+    printCtx.beginPath();
+    printCtx.moveTo(x, MARGIN + canvasH);
+    printCtx.lineTo(x, MARGIN + canvasH + tickSize);
+    printCtx.stroke();
+    
+    // Labels in margin (every unit or every 5)
+    const showLabel = (numTicksH <= 20) || (i % 5 === 0) || (i === 0) || (i === numTicksH);
+    if(showLabel){
+      const label = frame.unit === 'ratio' ? i.toString() : i + (frame.unit === 'in' ? '"' : 'cm');
+      printCtx.textAlign = 'center';
+      printCtx.fillText(label, x, MARGIN - 35);
+      printCtx.fillText(label, x, MARGIN + canvasH + 55);
+    }
+  }
+  
+  // Vertical ticks and labels (left and right margins)
+  const numTicksV = frame.unit === 'ratio' ? Math.round(frame.canvasH) : Math.floor(frame.canvasH);
+  for(let i = 0; i <= numTicksV; i++){
+    const y = MARGIN + (i / frame.canvasH) * canvasH;
+    
+    // Left tick extending into margin
+    printCtx.beginPath();
+    printCtx.moveTo(MARGIN, y);
+    printCtx.lineTo(MARGIN - tickSize, y);
+    printCtx.stroke();
+    
+    // Right tick extending into margin
+    printCtx.beginPath();
+    printCtx.moveTo(MARGIN + canvasW, y);
+    printCtx.lineTo(MARGIN + canvasW + tickSize, y);
+    printCtx.stroke();
+    
+    // Labels in margin (every unit or every 5)
+    const showLabel = (numTicksV <= 20) || (i % 5 === 0) || (i === 0) || (i === numTicksV);
+    if(showLabel){
+      const label = frame.unit === 'ratio' ? i.toString() : i + (frame.unit === 'in' ? '"' : 'cm');
+      printCtx.textAlign = 'right';
+      printCtx.fillText(label, MARGIN - 30, y + 10);
+      printCtx.textAlign = 'left';
+      printCtx.fillText(label, MARGIN + canvasW + 30, y + 10);
+    }
+  }
+  
+  // Draw grid overlay if enabled (inside canvas area)
+  if(gridMode !== 'off'){
+    printCtx.save();
+    printCtx.strokeStyle = "rgba(0,0,0,0.3)";
+    printCtx.lineWidth = 2;
+    printCtx.setLineDash([8, 8]);
+    
+    if(gridMode === 'thirds'){
+      // Vertical thirds
+      for(let i = 1; i < 3; i++){
+        const x = MARGIN + (canvasW / 3) * i;
+        printCtx.beginPath();
+        printCtx.moveTo(x, MARGIN);
+        printCtx.lineTo(x, MARGIN + canvasH);
+        printCtx.stroke();
+      }
+      // Horizontal thirds
+      for(let i = 1; i < 3; i++){
+        const y = MARGIN + (canvasH / 3) * i;
+        printCtx.beginPath();
+        printCtx.moveTo(MARGIN, y);
+        printCtx.lineTo(MARGIN + canvasW, y);
+        printCtx.stroke();
+      }
+    } else if(gridMode === 'quarters'){
+      // Vertical quarters
+      for(let i = 1; i < 4; i++){
+        const x = MARGIN + (canvasW / 4) * i;
+        printCtx.beginPath();
+        printCtx.moveTo(x, MARGIN);
+        printCtx.lineTo(x, MARGIN + canvasH);
+        printCtx.stroke();
+      }
+      // Horizontal quarters
+      for(let i = 1; i < 4; i++){
+        const y = MARGIN + (canvasH / 4) * i;
+        printCtx.beginPath();
+        printCtx.moveTo(MARGIN, y);
+        printCtx.lineTo(MARGIN + canvasW, y);
+        printCtx.stroke();
+      }
+    } else if(gridMode === 'diagonals'){
+      // Perfect square diagonals
+      printCtx.beginPath();
+      printCtx.moveTo(MARGIN, MARGIN);
+      printCtx.lineTo(MARGIN + canvasW, MARGIN + canvasH);
+      printCtx.stroke();
+      
+      printCtx.beginPath();
+      printCtx.moveTo(MARGIN + canvasW, MARGIN);
+      printCtx.lineTo(MARGIN, MARGIN + canvasH);
+      printCtx.stroke();
+    } else if((gridMode === 'every5' || gridMode === 'every10') && frame.canvasW && frame.canvasH){
+      const interval = gridMode === 'every5' ? 5 : 10;
+      
+      // Vertical lines
+      const numV = Math.floor(frame.canvasW / interval);
+      for(let i = 1; i <= numV; i++){
+        const x = MARGIN + (i * interval / frame.canvasW) * canvasW;
+        printCtx.beginPath();
+        printCtx.moveTo(x, MARGIN);
+        printCtx.lineTo(x, MARGIN + canvasH);
+        printCtx.stroke();
+      }
+      
+      // Horizontal lines
+      const numH = Math.floor(frame.canvasH / interval);
+      for(let i = 1; i <= numH; i++){
+        const y = MARGIN + (i * interval / frame.canvasH) * canvasH;
+        printCtx.beginPath();
+        printCtx.moveTo(MARGIN, y);
+        printCtx.lineTo(MARGIN + canvasW, y);
+        printCtx.stroke();
+      }
+    }
+    
+    printCtx.setLineDash([]);
+    printCtx.restore();
+  }
+  
+  // Draw dots (inside canvas area) with measurement labels next to them
+  printCtx.fillStyle = "#000000";
+  for(let i = 0; i < dots.length; i++){
+    const d = dots[i];
+    const px = MARGIN + ((d.x - frame.x) / frame.w) * canvasW;
+    const py = MARGIN + ((d.y - frame.y) / frame.h) * canvasH;
+    printCtx.beginPath();
+    printCtx.arc(px, py, 10, 0, Math.PI*2);
+    printCtx.fill();
+    
+    // Add label next to dot (if canvas size is set)
+    if(frame.canvasW && frame.canvasH){
+      const fromLeft = ((d.x - frame.x) / frame.w) * frame.canvasW;
+      const fromBottom = ((frame.y + frame.h - d.y) / frame.h) * frame.canvasH;
+      const unitLabel = frame.unit === 'ratio' ? 'u' : (frame.unit === 'in' ? '"' : 'cm');
+      const labelText = `${fromLeft.toFixed(1)}, ${fromBottom.toFixed(1)}${unitLabel}`;
+      
+      printCtx.font = "bold 20px system-ui";
+      printCtx.fillStyle = "rgba(0,0,0,0.75)";
+      printCtx.fillText(labelText, px + 15, py - 15);
+      printCtx.fillStyle = "#000000";
+    }
+  }
+  
+  // Draw lines (inside canvas area) with measurement labels next to them
+  printCtx.strokeStyle = "#000000";
+  printCtx.lineWidth = 3;
+  printCtx.font = "bold 20px system-ui";
+  
+  for(let i = 0; i < lines.length; i++){
+    const ln = lines[i];
+    printCtx.beginPath();
+    
+    if(ln.type === "vert"){
+      const px = MARGIN + ((ln.x - frame.x) / frame.w) * canvasW;
+      printCtx.moveTo(px, MARGIN);
+      printCtx.lineTo(px, MARGIN + canvasH);
+      printCtx.stroke();
+      
+      // Add label next to vertical line (near top)
+      if(frame.canvasW && frame.canvasH){
+        const fromLeft = ((ln.x - frame.x) / frame.w) * frame.canvasW;
+        const unitLabel = frame.unit === 'ratio' ? 'u' : (frame.unit === 'in' ? '"' : 'cm');
+        const labelText = `${fromLeft.toFixed(1)}${unitLabel}`;
+        
+        printCtx.fillStyle = "rgba(0,0,0,0.75)";
+        printCtx.fillText(labelText, px + 8, MARGIN + 30);
+        printCtx.fillStyle = "#000000";
+      }
+    } else if(ln.type === "hori"){
+      const py = MARGIN + ((ln.y - frame.y) / frame.h) * canvasH;
+      printCtx.moveTo(MARGIN, py);
+      printCtx.lineTo(MARGIN + canvasW, py);
+      printCtx.stroke();
+      
+      // Add label next to horizontal line (on right side)
+      if(frame.canvasW && frame.canvasH){
+        const fromBottom = ((frame.y + frame.h - ln.y) / frame.h) * frame.canvasH;
+        const unitLabel = frame.unit === 'ratio' ? 'u' : (frame.unit === 'in' ? '"' : 'cm');
+        const labelText = `${fromBottom.toFixed(1)}${unitLabel}`;
+        
+        printCtx.fillStyle = "rgba(0,0,0,0.75)";
+        printCtx.fillText(labelText, MARGIN + canvasW - 80, py - 8);
+        printCtx.fillStyle = "#000000";
+      }
+    } else if(ln.type === "slant"){
+      const px1 = MARGIN + ((ln.x1 - frame.x) / frame.w) * canvasW;
+      const py1 = MARGIN + ((ln.y1 - frame.y) / frame.h) * canvasH;
+      const px2 = MARGIN + ((ln.x2 - frame.x) / frame.w) * canvasW;
+      const py2 = MARGIN + ((ln.y2 - frame.y) / frame.h) * canvasH;
+      printCtx.moveTo(px1, py1);
+      printCtx.lineTo(px2, py2);
+      printCtx.stroke();
+      
+      // Add label next to slant line (at midpoint)
+      if(frame.canvasW && frame.canvasH){
+        const dx = ln.x2 - ln.x1;
+        const dy = ln.y2 - ln.y1;
+        const pixelDist = Math.sqrt(dx*dx + dy*dy);
+        const frameDiagonal = Math.sqrt(frame.w * frame.w + frame.h * frame.h);
+        const canvasDiagonal = Math.sqrt(frame.canvasW * frame.canvasW + frame.canvasH * frame.canvasH);
+        const realDist = (pixelDist / frameDiagonal) * canvasDiagonal;
+        let angle = Math.atan2(-dy, dx) * (180 / Math.PI);
+        if(angle < 0) angle += 360;
+        
+        const unitLabel = frame.unit === 'ratio' ? 'u' : (frame.unit === 'in' ? '"' : 'cm');
+        const labelText = `${realDist.toFixed(1)}${unitLabel} ${angle.toFixed(0)}°`;
+        const midX = (px1 + px2) / 2;
+        const midY = (py1 + py2) / 2;
+        
+        printCtx.fillStyle = "rgba(0,0,0,0.75)";
+        printCtx.fillText(labelText, midX + 15, midY - 10);
+        printCtx.fillStyle = "#000000";
+      }
+    }
+  }
+  
+  // Add corner crop marks for exact cutting
+  printCtx.strokeStyle = "#FF0000";
+  printCtx.lineWidth = 2;
+  const cropMarkLen = 40;
+  
+  // Top-left
+  printCtx.beginPath();
+  printCtx.moveTo(MARGIN - cropMarkLen, MARGIN);
+  printCtx.lineTo(MARGIN + cropMarkLen, MARGIN);
+  printCtx.moveTo(MARGIN, MARGIN - cropMarkLen);
+  printCtx.lineTo(MARGIN, MARGIN + cropMarkLen);
+  printCtx.stroke();
+  
+  // Top-right
+  printCtx.beginPath();
+  printCtx.moveTo(MARGIN + canvasW - cropMarkLen, MARGIN);
+  printCtx.lineTo(MARGIN + canvasW + cropMarkLen, MARGIN);
+  printCtx.moveTo(MARGIN + canvasW, MARGIN - cropMarkLen);
+  printCtx.lineTo(MARGIN + canvasW, MARGIN + cropMarkLen);
+  printCtx.stroke();
+  
+  // Bottom-left
+  printCtx.beginPath();
+  printCtx.moveTo(MARGIN - cropMarkLen, MARGIN + canvasH);
+  printCtx.lineTo(MARGIN + cropMarkLen, MARGIN + canvasH);
+  printCtx.moveTo(MARGIN, MARGIN + canvasH - cropMarkLen);
+  printCtx.lineTo(MARGIN, MARGIN + canvasH + cropMarkLen);
+  printCtx.stroke();
+  
+  // Bottom-right
+  printCtx.beginPath();
+  printCtx.moveTo(MARGIN + canvasW - cropMarkLen, MARGIN + canvasH);
+  printCtx.lineTo(MARGIN + canvasW + cropMarkLen, MARGIN + canvasH);
+  printCtx.moveTo(MARGIN + canvasW, MARGIN + canvasH - cropMarkLen);
+  printCtx.lineTo(MARGIN + canvasW, MARGIN + canvasH + cropMarkLen);
+  printCtx.stroke();
+  
+  const data = printCanvas.toDataURL("image/png");
+  const a = document.createElement("a");
+  a.href = data;
+  a.download = `print-to-scale-${frame.canvasW}x${frame.canvasH}${frame.unit === 'in' ? 'in' : frame.unit === 'cm' ? 'cm' : 'ratio'}.png`;
+  a.click();
+};
+
+exportCancelBtn.onclick = ()=>{
+  exportMenu.style.display = "none";
+};
+
+// Close menu when clicking outside
+document.addEventListener("click", (e)=>{
+  if(!exportBtn.contains(e.target) && !exportMenu.contains(e.target)){
+    exportMenu.style.display = "none";
+  }
+  if(!gridBtn.contains(e.target) && !document.getElementById("gridMenu").contains(e.target)){
+    document.getElementById("gridMenu").style.display = "none";
+  }
+});
+
+/* -------- Grid Menu -------- */
+const gridMenu = document.getElementById("gridMenu");
+const gridBtn = document.getElementById("gridBtn");
+
+gridBtn.onclick = (e)=>{
+  const rect = gridBtn.getBoundingClientRect();
+  const menuHeight = 180; // Approximate grid menu height
+  const spaceBelow = window.innerHeight - rect.bottom;
+  const spaceAbove = rect.top;
+  
+  gridMenu.style.display = "block";
+  gridMenu.style.left = rect.left + "px";
+  
+  // Position above if not enough space below
+  if(spaceBelow < menuHeight && spaceAbove > menuHeight){
+    gridMenu.style.top = (rect.top - menuHeight - 8) + "px";
+  } else {
+    gridMenu.style.top = (rect.bottom + 8) + "px";
+  }
+};
+
+document.getElementById("gridThirds").onclick = ()=>{
+  gridMode = 'thirds';
+  gridMenu.style.display = "none";
+};
+
+document.getElementById("gridQuarters").onclick = ()=>{
+  gridMode = 'quarters';
+  gridMenu.style.display = "none";
+};
+
+document.getElementById("gridDiagonals").onclick = ()=>{
+  gridMode = 'diagonals';
+  gridMenu.style.display = "none";
+};
+
+document.getElementById("gridEvery5").onclick = ()=>{
+  if(!frame.canvasW || !frame.canvasH){
+    alert("Set canvas dimensions in Custom Frame to use measured grids");
+    gridMenu.style.display = "none";
+    return;
+  }
+  gridMode = 'every5';
+  gridMenu.style.display = "none";
+};
+
+document.getElementById("gridEvery10").onclick = ()=>{
+  if(!frame.canvasW || !frame.canvasH){
+    alert("Set canvas dimensions in Custom Frame to use measured grids");
+    gridMenu.style.display = "none";
+    return;
+  }
+  gridMode = 'every10';
+  gridMenu.style.display = "none";
+};
+
+document.getElementById("gridOff").onclick = ()=>{
+  gridMode = 'off';
+  gridMenu.style.display = "none";
+};
+
+/* -------- Init -------- */
+(async function init(){
+  await getDevices();
+  await startCamera();
+  frame.ratio = 1;
+  
+  // Performance: Set camera-active class initially
+  document.body.classList.add("camera-active");
+  
+  resizeCanvas();
+  draw();
+  
+  // Set correct button text based on screen size
+  const isMobile = window.innerWidth < 1024;
+  const frameLabelSpan = frameFab.querySelector('.btn-label');
+  const customLabelSpan = customRatioBtn.querySelector('.btn-label');
+  
+  if(frameLabelSpan){
+    frameLabelSpan.textContent = isMobile ? '1:1' : 'Frame: 1:1';
+  }
+  
+  if(customLabelSpan){
+    customLabelSpan.textContent = isMobile ? 'Custom' : 'Custom Frame';
+  }
+})();
+  if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js");
+  });
+}
+
+/* -------- Tour System -------- */
+const tourSteps = [
+  {
+    title: "Welcome to ValueMirror!",
+    content: "This quick tour will show you how to set up your canvas and draw guides in under 60 seconds."
+  },
+  {
+    title: "Step 1: Set Canvas Size",
+    content: "Click <strong>Custom Frame</strong> to enter your canvas dimensions (e.g., 16×20 inches). This lets you see exact measurements on your guides."
+  },
+  {
+    title: "Step 2: Import Photo",
+    content: "Click <strong>Import Image</strong> to load your reference photo. Use the <strong>Opacity slider</strong> to fade the image so you can see guides clearly."
+  },
+  {
+    title: "Step 3: Draw Guides",
+    content: "Use the <strong>block-in tools</strong> at the bottom:<br>• Dot - landmarks<br>• Vertical/Horizontal - structure<br>• Slant - angles"
+  },
+  {
+    title: "Step 4: Export Print-to-Scale",
+    content: "Click <strong>Export</strong> → <strong>Print-to-Scale</strong>. This creates a 1:1 size template with measurements. Tape it to your canvas and mark the guides!"
+  },
+  {
+    title: "You're Ready!",
+    content: "That's it! Click anywhere to start using ValueMirror.<br><br><em>Tip: Double-click the ? button anytime to replay this tour.</em>"
+  }
+];
+
+let currentTourStep = 0;
+
+function startTour(){
+  currentTourStep = 0;
+  document.getElementById("tourOverlay").style.display = "flex";
+  showTourStep();
+}
+
+function showTourStep(){
+  const step = tourSteps[currentTourStep];
+  const content = document.getElementById("tourContent");
+  content.innerHTML = `<h2 style="margin:0 0 16px 0; color:var(--accent);">${step.title}</h2><p style="margin:0; font-size:15px;">${step.content}</p>`;
+  
+  const prevBtn = document.getElementById("tourPrev");
+  const nextBtn = document.getElementById("tourNext");
+  
+  prevBtn.style.display = currentTourStep > 0 ? "block" : "none";
+  nextBtn.textContent = currentTourStep === tourSteps.length - 1 ? "Start Using App!" : "Next →";
+}
+
+document.getElementById("tourNext").onclick = ()=>{
+  if(currentTourStep < tourSteps.length - 1){
+    currentTourStep++;
+    showTourStep();
+  } else {
+    document.getElementById("tourOverlay").style.display = "none";
+  }
+};
+
+document.getElementById("tourPrev").onclick = ()=>{
+  if(currentTourStep > 0){
+    currentTourStep--;
+    showTourStep();
+  }
+};
+
+document.getElementById("tourSkip").onclick = ()=>{
+  document.getElementById("tourOverlay").style.display = "none";
+};
+
+
+</script>
+
+</body>
+</html>
